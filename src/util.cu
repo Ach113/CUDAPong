@@ -30,7 +30,7 @@ __global__ void mul(const float* inputs, float* outputs, const int size, const f
 
 
 // square matrix multiplication kernel
-__global__ void matMul(float *d_a, float *d_b, float *d_result, int n) {
+__global__ void dotProduct(float *d_a, float *d_b, float *d_result, int n) {
     __shared__ int tile_a[BLOCK_SIZE][BLOCK_SIZE];
     __shared__ int tile_b[BLOCK_SIZE][BLOCK_SIZE];
 
@@ -41,7 +41,7 @@ __global__ void matMul(float *d_a, float *d_b, float *d_result, int n) {
 
     for (int sub = 0; sub < gridDim.x; ++sub) {
         idx = row * n + sub * BLOCK_SIZE + threadIdx.x;
-        if(idx >= n*n) {
+        if (idx >= n*n) {
             // n may not divisible by BLOCK_SIZE
             tile_a[threadIdx.y][threadIdx.x] = 0;
         } else {
@@ -49,7 +49,7 @@ __global__ void matMul(float *d_a, float *d_b, float *d_result, int n) {
         }
 
         idx = (sub * BLOCK_SIZE + threadIdx.y) * n + col;
-        if(idx >= n*n) {
+        if (idx >= n*n) {
             tile_b[threadIdx.y][threadIdx.x] = 0;
     	} else {
             tile_b[threadIdx.y][threadIdx.x] = d_b[idx];
@@ -61,7 +61,24 @@ __global__ void matMul(float *d_a, float *d_b, float *d_result, int n) {
         }
         __syncthreads();
     }
-    if(row < n && col < n) {
+    if (row < n && col < n) {
         d_result[row * n + col] = tmp;
     }
+}
+
+__global__ void outerProduct(float* A, float* B, float* C, int n) {
+
+    int i = blockIdx.y * blockDim.y + threadIdx.y;
+    int j = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (i < n && j < n) {
+
+        float sum = 0.0f;
+
+        for (int k = 0; k < n; k++) {
+            sum += A[i * n + k] * B[k * n + j];
+        }
+
+        C[i * n + j] = sum;
+    } 
 }
