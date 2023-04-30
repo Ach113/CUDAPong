@@ -14,10 +14,10 @@ __global__ void sigmoid(const float* inputs, float* outputs, const int size) {
 
 
 // relu activation function CUDA kernel
-__global__ void relu(const float* inputs, float* outputs, const int size) {
+__global__ void relu(const float* inputs, const float* query, float* outputs, const int size) {
     int idx = threadIdx.x + blockIdx.x * blockDim.x;
     if (idx < size) {
-        outputs[idx] = inputs[idx] >= 0 ? inputs[idx] : 0;
+        outputs[idx] = query[idx] >= 0 ? inputs[idx] : 0;
     }
 }
 
