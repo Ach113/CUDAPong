@@ -1,6 +1,8 @@
 #include "util.h"
 
 #define BLOCK_SIZE 32
+#define TILE_DIM 32
+#define BLOCK_ROWS 8
 
 // sigmoid activation function CUDA kernel
 __global__ void sigmoid(const float* inputs, float* outputs, const int size) {
@@ -66,6 +68,18 @@ __global__ void dotProduct(float *d_a, float *d_b, float *d_result, int n) {
     }
 }
 
+__global__ void transpose(const float *input, float *output, int rows, int cols) {
+    int tid_x = threadIdx.x + blockDim.x * blockIdx.x;
+    int tid_y = threadIdx.y + blockDim.y * blockIdx.y;
+    int idx = tid_x + tid_y * cols;
+
+    if (tid_x < cols && tid_y < rows) {
+        output[idx] = input[tid_y + tid_x * rows];
+    }
+}
+
+
+// TODO: I dont think this one does what it should be doing
 __global__ void outerProduct(float* A, float* B, float* C, int n) {
 
     int i = blockIdx.y * blockDim.y + threadIdx.y;
