@@ -1,6 +1,8 @@
 #include "util.h"
 
 #define BLOCK_SIZE 32
+#define TILE_SIZE 32
+#define BLOCK_ROWS 8
 
 // sigmoid activation function CUDA kernel
 __global__ void sigmoid(const float* inputs, float* outputs, const int size) {
@@ -12,10 +14,10 @@ __global__ void sigmoid(const float* inputs, float* outputs, const int size) {
 
 
 // relu activation function CUDA kernel
-__global__ void relu(const float* inputs, float* outputs, const int size) {
+__global__ void relu(const float* inputs, const float* query, float* outputs, const int size) {
     int idx = threadIdx.x + blockIdx.x * blockDim.x;
     if (idx < size) {
-        outputs[idx] = inputs[idx] >= 0 ? inputs[idx] : 0;
+        outputs[idx] = query[idx] >= 0 ? inputs[idx] : 0;
     }
 }
 
@@ -30,55 +32,57 @@ __global__ void mul(const float* inputs, float* outputs, const int size, const f
 
 
 // square matrix multiplication kernel
-__global__ void dotProduct(float *d_a, float *d_b, float *d_result, int n) {
-    __shared__ int tile_a[BLOCK_SIZE][BLOCK_SIZE];
-    __shared__ int tile_b[BLOCK_SIZE][BLOCK_SIZE];
+__global__ void dotProduct(float *A, float *B, float *C, int m, int n, int k) {
+    __shared__ float A_tile[TILE_SIZE][TILE_SIZE];
+    __shared__ float B_tile[TILE_SIZE][TILE_SIZE];
 
-    int row = blockIdx.y * BLOCK_SIZE + threadIdx.y;
-    int col = blockIdx.x * BLOCK_SIZE + threadIdx.x;
-    float tmp = 0;
-    int idx;
+    int bx = blockIdx.x;
+    int by = blockIdx.y;
+    int tx = threadIdx.x;
+    int ty = threadIdx.y;
 
-    for (int sub = 0; sub < gridDim.x; ++sub) {
-        idx = row * n + sub * BLOCK_SIZE + threadIdx.x;
-        if (idx >= n*n) {
-            // n may not divisible by BLOCK_SIZE
-            tile_a[threadIdx.y][threadIdx.x] = 0;
+    int row = by * TILE_SIZE + ty;
+    int col = bx * TILE_SIZE + tx;
+
+    float sum = 0;
+
+    for (int i = 0; i < (n - 1) / TILE_SIZE + 1; ++i) {
+        if (row < m && i * TILE_SIZE + tx < n) {
+            A_tile[ty][tx] = A[row * n + i * TILE_SIZE + tx];
         } else {
-            tile_a[threadIdx.y][threadIdx.x] = d_a[idx];
+            A_tile[ty][tx] = 0;
         }
-
-        idx = (sub * BLOCK_SIZE + threadIdx.y) * n + col;
-        if (idx >= n*n) {
-            tile_b[threadIdx.y][threadIdx.x] = 0;
-    	} else {
-            tile_b[threadIdx.y][threadIdx.x] = d_b[idx];
+        if (col < k && i * TILE_SIZE + ty < n) {
+            B_tile[ty][tx] = B[(i * TILE_SIZE + ty) * k + col];
+        } else {
+            B_tile[ty][tx] = 0;
         }
         __syncthreads();
 
-        for (int k = 0; k < BLOCK_SIZE; ++k) {
-            tmp += tile_a[threadIdx.y][k] * tile_b[k][threadIdx.x];
+        for (int j = 0; j < TILE_SIZE; ++j) {
+            sum += A_tile[ty][j] * B_tile[j][tx];
         }
         __syncthreads();
     }
-    if (row < n && col < n) {
-        d_result[row * n + col] = tmp;
+    if (row < m && col < k) {
+        C[row * k + col] = sum;
     }
 }
 
-__global__ void outerProduct(float* A, float* B, float* C, int n) {
+__global__ void transpose(const float *input, float *output, int rows, int cols) {
+    int tid_x = threadIdx.x + blockDim.x * blockIdx.x;
+    int tid_y = threadIdx.y + blockDim.y * blockIdx.y;
+    int idx = tid_x + tid_y * cols;
 
-    int i = blockIdx.y * blockDim.y + threadIdx.y;
-    int j = blockIdx.x * blockDim.x + threadIdx.x;
+    if (tid_x < cols && tid_y < rows) {
+        output[idx] = input[tid_y + tid_x * rows];
+    }
+}
 
-    if (i < n && j < n) {
-
-        float sum = 0.0f;
-
-        for (int k = 0; k < n; k++) {
-            sum += A[i * n + k] * B[k * n + j];
-        }
-
-        C[i * n + j] = sum;
-    } 
+__global__ void outerProduct(const float* a, const float* b, float* result, int m, int n) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int j = blockIdx.y * blockDim.y + threadIdx.y;
+    if (i < m && j < n) {
+        result[i * n + j] = a[i] * b[j];
+    }
 }
