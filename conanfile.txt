@@ -1,11 +1,11 @@
 [requires]
+libwebp/1.2.4
 opencv/4.5.5
 cppzmq/4.8.1
-pybind11/2.7.2
-pyzmq/22.3.0
+pybind11/2.10.1
 
 [options]
-opencv:shared=True
+opencv/*:shared=True
 
 [generators]
 cmake
