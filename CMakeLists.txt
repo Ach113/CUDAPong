@@ -36,4 +36,5 @@ project(cuda_pong)
 # message("FILTERED_LIB_DIRS = ${FILTERED_LIB_DIRS}")
 # link_directories(${FILTERED_LIB_DIRS})
 
-add_subdirectory(example/zmq/py_cpp/simple/gym_client)
+# add_subdirectory(example/zmq/py_cpp/simple/gym_client)
+add_subdirectory(example/zmq/py_cpp/simple_v2/gym_client)
