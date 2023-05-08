@@ -2,6 +2,14 @@
 
 Training pong agent using policy gradient implemented in CUDA
 
+## Setup Docker Container
+
+~~~bash
+cd CUDAPong
+
+sudo docker run -it --name cmpe214_project --privileged --gpus all -v $PWD:/github/CUDAPong ubuntu:16.04
+~~~
+
 ## Pong Gym ZMQ Python Server & Client 
 
 You will navigate to the gym server and client folders:
