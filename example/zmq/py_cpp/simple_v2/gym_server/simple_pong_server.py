@@ -51,6 +51,8 @@ while True:
 
             # Send the observation to the C++ client
             print("Send the next observation to the C++ client")
+            print("observation[0] = {}".format(observation[0]))
+            print("len(observation[0]) {}".format(len(observation[0])))
             socket.send_pyobj(observation)
 
             print("Send the reward to the C++ client")

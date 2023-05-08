@@ -1,18 +1,11 @@
 #include <iostream>
 #include <zmq.hpp>
 #include <opencv2/opencv.hpp>
-#include <numpy/arrayobject.h>
-#include <Python.h>
+#include <vector>
 
-using namespace cv;
 using namespace std;
 
 int main() {
-    // Initialize Python interpreter
-    cout << "Initialize Python interpreter\n";
-    Py_Initialize();
-    import_array();
-
     // Create ZMQ context and socket
     cout << "Create ZMQ context and socket\n";
     zmq::context_t context(1);
@@ -41,22 +34,26 @@ int main() {
     cout << "Receive the initial game state\n";
     zmq::message_t state_reply;
     socket.recv(&state_reply);
-    cout << "Ran socket.recv(state_reply)\n";
+
+    cout << "Render the game state\n";
     cout << "state_reply.size() = " << state_reply.size() << "\n";
-    PyArrayObject* state_array = reinterpret_cast<PyArrayObject*>(state_reply.data());
-    cout << "Converting state_reply.data to PyArrayObject*\n";
-    auto state_mat = PyArray_GETCONTIGUOUS(state_array);
-    cout << "Stored PyArray into state_mat\n";
+    std::vector<uchar> state_data(state_reply.size());
+    memcpy(state_data.data(), state_reply.data(), state_reply.size());
+
+    for(const char& value: state_data) {
+        cout << static_cast<int>(value) << " ";
+    }
+    cout << "\n";
+
+    cv::Mat state_mat = cv::imdecode(state_data, cv::IMREAD_COLOR);
+    cv::imshow("Pong", state_mat);
+    cv::waitKey(1);
 
     // Play the game until it's over
     cout << "Play the game until it's over\n";
     bool done = false;
     while(!done) {
         // Render the game state
-        cout << "Render the game state\n";
-        cv::Mat image(PyArray_SHAPE(state_array)[0], PyArray_SHAPE(state_array)[1], CV_8UC3, PyArray_DATA(state_array));
-        cv::imshow("Pong", image);
-        cv::waitKey(10);
 
         // Choose the action
         cout << "Choose the action\n";
@@ -71,26 +68,25 @@ int main() {
 
         // Receive the next game state and reward
         cout << "Receive the next game state and reward\n";
-        zmq::message_t next_state_reply;
-        socket.recv(&next_state_reply);
-        PyArrayObject* next_state_array = reinterpret_cast<PyArrayObject*>(next_state_reply.data());
-        auto next_state_mat = PyArray_GETCONTIGUOUS(next_state_array);
+        zmq::message_t next_state_reply, reward_reply, done_reply, info_reply;
 
-        zmq::message_t reward_reply;
+        // Decode next observation and display
+        socket.recv(&next_state_reply);
+        std::vector<uchar> next_state_data(next_state_reply.size());
+        memcpy(next_state_data.data(), next_state_reply.data(), next_state_reply.size());
+        cv::Mat next_state_mat = cv::imdecode(next_state_data, cv::IMREAD_COLOR);
+        cv::imshow("Pong", next_state_mat);
+        cv::waitKey(1);
+
+        // zmq::message_t reward_reply;
         socket.recv(&reward_reply);
         int reward = stoi(string(static_cast<char*>(reward_reply.data()), reward_reply.size()));
 
         // Check if the game is over
         cout << "Check if the game is over\n";
-        zmq::message_t done_reply;
+        // zmq::message_t done_reply;
         socket.recv(&done_reply);
-        done = stoi(string(static_cast<char*>(done_reply.data()), done_reply.size()));
-
-        // Update the game state
-        cout << "Update the game state\n";
-        Py_XDECREF(state_array);
-        state_array = next_state_array;
-        state_mat = next_state_mat;
+        done = *(reinterpret_cast<bool*>(done_reply.data()));
     }
 
     cout << "Exit the game\n";
@@ -98,12 +94,6 @@ int main() {
     zmq::message_t exit_request(exit_msg.size());
     memcpy(exit_request.data(), exit_msg.c_str(), exit_msg.size());
     socket.send(exit_request);
-
-    // Clean up and exit
-    cout << "Clean up and exit\n";
-    Py_XDECREF(state_array);
-    Py_XDECREF(state_mat);
-    Py_Finalize();
 
     return 0;
 }
